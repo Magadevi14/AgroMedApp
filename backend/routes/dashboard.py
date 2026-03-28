@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from extensions import mysql
+from flask import Blueprint, jsonify, request
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
@@ -183,3 +184,75 @@ def market_prices():
         })
 
     return jsonify({"market_prices": price_list})
+
+@dashboard_bp.route('/add-crop', methods=['POST'])
+@jwt_required()
+def add_crop():
+
+    user_id = get_jwt_identity()
+    data = request.json
+
+    farm_id = data.get("farm_id")
+    name = data.get("name")
+    planting_date = data.get("planting_date")
+
+    cursor = mysql.connection.cursor()
+
+    # Check farm ownership
+    cursor.execute(
+        "SELECT id FROM farms WHERE id=%s AND user_id=%s",
+        (farm_id, user_id)
+    )
+
+    farm = cursor.fetchone()
+
+    if not farm:
+        cursor.close()
+        return jsonify({"message": "Access denied"}), 403
+
+    cursor.execute("""
+        INSERT INTO crops (farm_id, name, planting_date, status)
+        VALUES (%s, %s, %s, 'growing')
+    """, (farm_id, name, planting_date))
+
+    mysql.connection.commit()
+    cursor.close()
+
+    return jsonify({"message": "Crop added successfully"})
+
+@dashboard_bp.route('/add-activity', methods=['POST'])
+@jwt_required()
+def add_activity():
+
+    user_id = get_jwt_identity()
+    data = request.json
+
+    farm_id = data.get("farm_id")
+    activity_type = data.get("activity_type")
+    description = data.get("description")
+    activity_date = data.get("activity_date")
+
+    cursor = mysql.connection.cursor()
+
+    # Check farm ownership
+    cursor.execute(
+        "SELECT id FROM farms WHERE id=%s AND user_id=%s",
+        (farm_id, user_id)
+    )
+
+    farm = cursor.fetchone()
+
+    if not farm:
+        cursor.close()
+        return jsonify({"message": "Access denied"}), 403
+
+    cursor.execute("""
+        INSERT INTO farm_activities 
+        (farm_id, activity_type, description, activity_date)
+        VALUES (%s, %s, %s, %s)
+    """, (farm_id, activity_type, description, activity_date))
+
+    mysql.connection.commit()
+    cursor.close()
+
+    return jsonify({"message": "Activity added successfully"})
